@@ -1,4 +1,15 @@
-# Shijima-Qt
+# Shijima-Qt (Maintained Fork)
+
+This repository is a maintained fork of the original Shijima-Qt project:
+
+https://github.com/pixelomer/Shijima-Qt
+
+The original project has been discontinued and archived by its author.  
+This fork aims to keep the project functional and usable by applying fixes and improvements as needed.
+
+This repository is not affiliated with or officially supported by the original author. All credit for the original work belongs to them.
+
+---
 
 ![Shijima-Qt running on Fedora 41](.images/Shijima-Qt-Fedora.jpg)
 
