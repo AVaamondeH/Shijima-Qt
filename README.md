@@ -18,7 +18,6 @@ Cross-platform shimeji desktop pet simulator. Built with Qt6. Supports macOS, Li
 - [Download the latest release](https://github.com/AVaamondeH/Shijima-Qt/releases/latest)
 - [See all releases](https://github.com/AVaamondeH/Shijima-Qt/releases)
 - [Report a bug or make a feature request](https://github.com/AVaamondeH/Shijima-Qt/issues)
-- [Shijima homepage](https://getshijima.app)
 
 If you'd like to support the development of Shijima, consider becoming a [sponsor on GitHub](https://github.com/sponsors/pixelomer) or [buy me a coffee](https://buymeacoffee.com/pixelomer).
 
