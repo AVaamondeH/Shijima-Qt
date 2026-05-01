@@ -62,6 +62,8 @@
 #include <QColorDialog>
 #include <cstring>
 #include <cstdint>
+#include <cstdlib>
+#include <QIcon>
 
 #define SHIJIMAQT_SUBTICK_COUNT 4
 
@@ -136,6 +138,24 @@ void ShijimaManager::killAllButOne(QString const& name) {
                 foundOne = true;
                 continue;
             }
+            mascot->markForDeletion();
+        }
+    }
+}
+
+void ShijimaManager::enforceMascotLimitPerCharacter() {
+    if (m_maxMascotsPerCharacter <= 0) {
+        return; // Unlimited
+    }
+
+    std::map<QString, int> counts;
+
+    for (auto mascot : m_mascots) {
+        QString name = mascot->mascotName();
+
+        counts[name]++;
+
+        if (counts[name] > m_maxMascotsPerCharacter) {
             mascot->markForDeletion();
         }
     }
@@ -224,7 +244,7 @@ void ShijimaManager::importAction() {
 
 void ShijimaManager::quitAction() {
     m_allowClose = true;
-    close();
+    std::exit(0);
 }
 
 void ShijimaManager::deleteAction() {
@@ -324,9 +344,10 @@ void ShijimaManager::buildToolbar() {
             bool initial = m_settings.value(key, 
                 QVariant::fromValue(true)).toBool();
 
-            action = menu->addAction("Enable multiplication");
-            action->setCheckable(true);
-            action->setChecked(initial);
+            m_enableMultiplicationAction = menu->addAction("Enable multiplication");
+            m_enableMultiplicationAction->setCheckable(true);
+            m_enableMultiplicationAction->setChecked(initial);
+            action = m_enableMultiplicationAction;
             for (auto &env : m_env) {
                 env->allows_breeding = initial;
             }
@@ -337,7 +358,49 @@ void ShijimaManager::buildToolbar() {
                 m_settings.setValue(key, QVariant::fromValue(checked));
             });
         }
+        submenu = menu->addMenu("Max copies per character");
+        {
+            static const QString key = "maxMascotsPerCharacter";
 
+            m_maxMascotsPerCharacter = m_settings.value(
+                key,
+                QVariant::fromValue(1)
+            ).toInt();
+
+            auto addMaxCopiesPreset = [this, submenu, key](int value, const QString& text) {
+                QAction *presetAction = submenu->addAction(text);
+                presetAction->setCheckable(true);
+                presetAction->setChecked(m_maxMascotsPerCharacter == value);
+
+                connect(presetAction, &QAction::triggered, [this, submenu, key, value, presetAction]() {
+                    for (auto neighbour : submenu->actions()) {
+                        neighbour->setChecked(false);
+                    }
+
+                    m_maxMascotsPerCharacter = value;
+                    m_settings.setValue(key, QVariant::fromValue(value));
+                    presetAction->setChecked(true);
+
+                    bool breedingEnabled = value == 0 || value > 1;
+
+                    m_settings.setValue("multiplicationEnabled", breedingEnabled);
+                    if (m_enableMultiplicationAction) {
+                        m_enableMultiplicationAction->setChecked(breedingEnabled);
+                    }
+                    for (auto &env : m_env) {
+                        env->allows_breeding = breedingEnabled;
+                    }
+
+                    enforceMascotLimitPerCharacter();
+                });
+            };
+
+            addMaxCopiesPreset(1, "1");
+            addMaxCopiesPreset(3, "3");
+            addMaxCopiesPreset(6, "6");
+            addMaxCopiesPreset(9, "9");
+            addMaxCopiesPreset(0, "Unlimited");
+        }
         {
             action = menu->addAction("Windowed mode");
             m_windowedModeAction = action;
@@ -696,7 +759,7 @@ void ShijimaManager::setWindowedMode(bool windowedMode) {
 }
 
 ShijimaManager::ShijimaManager(QWidget *parent):
-    PlatformWidget(parent, PlatformWidget::ShowOnAllDesktops),
+    PlatformWidget(parent, static_cast<Flags>(0)),
     m_sandboxWidget(nullptr),
     m_settings("pixelomer", "Shijima-Qt"),
     m_idCounter(0), m_httpApi(this),
@@ -739,8 +802,18 @@ ShijimaManager::ShijimaManager(QWidget *parent):
     if (m_windowObserver.tickFrequency() > 0) {
         m_windowObserverTimer = startTimer(m_windowObserver.tickFrequency());
     }
-    setWindowFlags((windowFlags() | Qt::CustomizeWindowHint | Qt::MaximizeUsingFullscreenGeometryHint |
-        Qt::WindowMinimizeButtonHint) & ~Qt::WindowMaximizeButtonHint);
+    setWindowFlags(
+    Qt::Window |
+    Qt::CustomizeWindowHint |
+    Qt::WindowTitleHint |
+    Qt::WindowSystemMenuHint |
+    Qt::WindowMinimizeButtonHint |
+    Qt::WindowCloseButtonHint
+);
+
+    setWindowIcon(QIcon("shijima-qt.ico"));
+    setWindowTitle("Shijima-Qt");
+    setAttribute(Qt::WA_QuitOnClose, true);
     setManagerVisible(true);
 
     connect(&m_listWidget, &QListWidget::itemDoubleClicked,
@@ -814,8 +887,8 @@ void ShijimaManager::updateEnvironment(QScreen *screen) {
         geometry = screen->geometry();
         available = screen->availableGeometry();
     }
-    int taskbarHeight = available.bottom() - geometry.bottom();
-    int statusBarHeight = geometry.top() - available.top();
+    int taskbarHeight = geometry.bottom() - available.bottom();
+    int statusBarHeight = available.top() - geometry.top();
     if (taskbarHeight < 0) {
         taskbarHeight = 0;
     }
@@ -878,7 +951,9 @@ void ShijimaManager::updateEnvironment() {
 }
 
 void ShijimaManager::askClose() {
-    setManagerVisible(true);
+    show();
+    raise();
+    activateWindow();
     QMessageBox msgBox { this };
     msgBox.setWindowTitle("Close Shijima-Qt");
     msgBox.setIcon(QMessageBox::Icon::Question);
@@ -887,38 +962,33 @@ void ShijimaManager::askClose() {
     msgBox.setText("Do you want to close Shijima-Qt?");
     int ret = msgBox.exec();
     if (ret == QMessageBox::Button::Yes) {
-        #if defined(__APPLE__)
-        QCoreApplication::quit();
-        #else
         m_allowClose = true;
-        close();
-        #endif
+        std::exit(0);
     }
 }
 
 void ShijimaManager::setManagerVisible(bool visible) {
-    #if !defined(__APPLE__)
+#if !defined(__APPLE__)
     auto screen = QGuiApplication::primaryScreen();
     auto geometry = screen->geometry();
-    if (!m_wasVisible && visible) {
-        if (window() != nullptr) {
-            window()->activateWindow();
-        }
+
+    if (visible) {
         setMinimumSize(480, 320);
         setMaximumSize(999999, 999999);
+        resize(480, 320);
         move(geometry.width() / 2 - 240, geometry.height() / 2 - 160);
+
+        show();
+        raise();
+        activateWindow();
+
         m_wasVisible = true;
     }
-    else if (m_wasVisible && !visible) {
-        setFixedSize(1, 1);
-        move(geometry.width() * 10, geometry.height() * 10);
-        clearFocus();
-        if (window() != nullptr) {
-            window()->activateWindow();
-        }
+    else {
+        hide();
         m_wasVisible = false;
     }
-    #else
+#else
     if (visible) {
         show();
         m_wasVisible = true;
@@ -930,7 +1000,7 @@ void ShijimaManager::setManagerVisible(bool visible) {
         hide();
         m_wasVisible = false;
     }
-    #endif
+#endif
 }
 
 bool ShijimaManager::windowedMode() {
@@ -966,20 +1036,25 @@ void ShijimaManager::tick() {
         #endif
     }
 
+//    #if !defined(__APPLE__)
+//    if (isMinimized()) {
+//        setWindowState(windowState() & ~Qt::WindowMinimized);
+//        setManagerVisible(!m_wasVisible);
+//    }
+//    else if (isMaximized()) {
+//        setManagerVisible(true);
+//    }
+//    #endif
+
     #if !defined(__APPLE__)
-    if (isMinimized()) {
-        setWindowState(windowState() & ~Qt::WindowMinimized);
-        setManagerVisible(!m_wasVisible);
-    }
-    else if (isMaximized()) {
+    if (isMaximized()) {
         setManagerVisible(true);
     }
     #endif
 
     if (m_mascots.size() == 0) {
         #if !defined(__APPLE__)
-        if (!windowedMode() && (isMinimized() || !m_wasVisible)) {
-            setWindowState(windowState() & ~Qt::WindowMinimized);
+        if (!windowedMode() && !m_wasVisible) {
             setManagerVisible(true);
         }
         #endif
@@ -1012,6 +1087,8 @@ void ShijimaManager::tick() {
             }
         }
         if (breedRequest.available) {
+            if (m_maxMascotsPerCharacter > 0 &&
+                countMascotsByName(breedRequest.name) >= m_maxMascotsPerCharacter)
             if (breedRequest.name == "") {
                 breedRequest.name = shimeji->mascotName().toStdString();
             }
@@ -1077,6 +1154,10 @@ QScreen *ShijimaManager::mascotScreen() {
 }
 
 ShijimaWidget *ShijimaManager::spawn(std::string const& name) {
+    if (m_maxMascotsPerCharacter > 0 &&
+    countMascotsByName(name) >= m_maxMascotsPerCharacter) {
+    return nullptr;
+    }
     QScreen *screen = mascotScreen();
     updateEnvironment(screen);
     auto &env = m_env[screen];
@@ -1118,4 +1199,16 @@ void ShijimaManager::spawnClicked() {
         spawn(pair.first);
         break;
     }
+}
+
+int ShijimaManager::countMascotsByName(const std::string& name) const {
+    int count = 0;
+
+    for (auto mascot : m_mascots) {
+        if (mascot->mascotName().toStdString() == name) {
+            count++;
+        }
+    }
+
+    return count;
 }

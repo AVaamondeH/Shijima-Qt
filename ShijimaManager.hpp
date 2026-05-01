@@ -127,4 +127,8 @@ private:
     std::mutex m_mutex;
     std::condition_variable m_tickCallbackCompletion;
     std::list<std::function<void(ShijimaManager *)>> m_tickCallbacks;
+    int countMascotsByName(const std::string& name) const;
+    int m_maxMascotsPerCharacter;
+    QAction *m_enableMultiplicationAction = nullptr;
+    void enforceMascotLimitPerCharacter();
 };
