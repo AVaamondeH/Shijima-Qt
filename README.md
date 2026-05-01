@@ -15,7 +15,7 @@ This repository is not affiliated with or officially supported by the original a
 
 Cross-platform shimeji desktop pet simulator. Built with Qt6. Supports macOS, Linux and Windows.
 
-- [Download the latest release](hub.com/AVaamondeH/Shijima-Qt/releases/latest)
+- [Download the latest release](https://github.com/AVaamondeH/Shijima-Qt/releases/latest)
 - [See all releases](https://github.com/AVaamondeH/Shijima-Qt/releases)
 - [Report a bug or make a feature request](https://github.com/AVaamondeH/Shijima-Qt/issues)
 - [Shijima homepage](https://getshijima.app)
